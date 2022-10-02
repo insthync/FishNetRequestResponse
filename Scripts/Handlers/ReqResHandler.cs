@@ -54,7 +54,7 @@ namespace FishNet.Insthync.ResquestResponse
         }
 
         /// <summary>
-        /// Create a new request and send to taget
+        /// Create a new request and send to target
         /// </summary>
         /// <typeparam name="TRequest"></typeparam>
         /// <param name="networkConnection"></param>
@@ -87,6 +87,7 @@ namespace FishNet.Insthync.ResquestResponse
             }
             // Create request
             uint requestId = CreateRequest(responseInvokers[requestType], responseHandler);
+            HandleRequestTimeout(requestId, millisecondsTimeout);
             // Write request
             writer.Reset();
             writer.Write(request);
@@ -103,10 +104,14 @@ namespace FishNet.Insthync.ResquestResponse
                 manager.NetworkManager.ClientManager.Broadcast(requestMessage);
             else
                 manager.NetworkManager.ServerManager.Broadcast(networkConnection, requestMessage);
-            HandleRequestTimeout(requestId, millisecondsTimeout);
             return true;
         }
 
+        /// <summary>
+        /// Proceed request which reveived from server or client
+        /// </summary>
+        /// <param name="networkConnection"></param>
+        /// <param name="requestMessage"></param>
         public void ProceedRequest(NetworkConnection networkConnection, RequestMessage requestMessage)
         {
             ushort requestType = requestMessage.requestType;
@@ -122,6 +127,14 @@ namespace FishNet.Insthync.ResquestResponse
             requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, manager.NetworkManager)), RequestProceeded);
         }
 
+        /// <summary>
+        /// Send response to the requester
+        /// </summary>
+        /// <param name="networkConnection"></param>
+        /// <param name="requestId"></param>
+        /// <param name="responseCode"></param>
+        /// <param name="response"></param>
+        /// <param name="extraResponseSerializer"></param>
         private void RequestProceeded(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, object response, SerializerDelegate extraResponseSerializer)
         {
             // Write response
@@ -142,6 +155,11 @@ namespace FishNet.Insthync.ResquestResponse
                 manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
         }
 
+        /// <summary>
+        /// Proceed response which reveived from server or client
+        /// </summary>
+        /// <param name="networkConnection"></param>
+        /// <param name="responseMessage"></param>
         public void ProceedResponse(NetworkConnection networkConnection, ResponseMessage responseMessage)
         {
             uint requestId = responseMessage.requestId;
