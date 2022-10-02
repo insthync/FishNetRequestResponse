@@ -1,21 +1,20 @@
-using LiteNetLib.Utils;
 using System;
 
-namespace Insthync.FishNet
+namespace FishNet.Insthync.ResquestResponse
 {
-    public interface IResponseHandlerInvoker
+    public interface IResponseInvoker
     {
         void InvokeResponse(ResponseHandlerData responseHandler, AckResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler);
         bool IsRequestTypeValid(Type type);
     }
 
-    public struct ResponseHandlerInvoker<TRequest, TResponse> : IResponseHandlerInvoker
+    public struct ResponseInvoker<TRequest, TResponse> : IResponseInvoker
         where TRequest : new()
         where TResponse : new()
     {
         private ResponseDelegate<TResponse> responseDelegate;
 
-        public ResponseHandlerInvoker(ResponseDelegate<TResponse> responseDelegate)
+        public ResponseInvoker(ResponseDelegate<TResponse> responseDelegate)
         {
             this.responseDelegate = responseDelegate;
         }
@@ -26,7 +25,8 @@ namespace Insthync.FishNet
             if (responseCode != AckResponseCode.Timeout &&
                 responseCode != AckResponseCode.Unimplemented)
             {
-                // TODO: Read the response
+                if (responseHandlerData.Reader != null)
+                    response = responseHandlerData.Reader.Read<TResponse>();
             }
             if (responseDelegate != null)
                 responseDelegate.Invoke(responseHandlerData, responseCode, response);

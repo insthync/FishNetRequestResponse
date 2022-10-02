@@ -1,4 +1,4 @@
-namespace Insthync.FishNet
+namespace FishNet.Insthync.ResquestResponse
 {
     public struct AsyncResponseData<TResponse>
     {

@@ -1,108 +1,121 @@
-using Insthync.FishNet;
-using LiteNetLib.Utils;
-using System.Collections;
+using FishNet.Connection;
+using FishNet.Serializing;
+using FishNet.Transporting;
+using LiteNetLib;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Insthync.FishNet
+namespace FishNet.Insthync.ResquestResponse
 {
-    public class ReqResHandler : MonoBehaviour
+    // TODO: Implement better logger
+    public class ReqResHandler
     {
-        protected readonly Dictionary<ushort, IRequestHandlerInvoker> requestHandlerInvokers = new Dictionary<ushort, IRequestHandlerInvoker>();
-        protected readonly Dictionary<ushort, IResponseHandlerInvoker> responseHandlerInvokers = new Dictionary<ushort, IResponseHandlerInvoker>();
+        protected readonly ReqResManager manager;
+        protected readonly Writer Writer = new Writer();
+        protected readonly Dictionary<ushort, IRequestInvoker> requestInvokers = new Dictionary<ushort, IRequestInvoker>();
+        protected readonly Dictionary<ushort, IResponseInvoker> responseInvokers = new Dictionary<ushort, IResponseInvoker>();
+        protected readonly ConcurrentDictionary<uint, RequestCallback> requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
+        protected uint nextRequestId;
+
+        public ReqResHandler(ReqResManager manager)
+        {
+            this.manager = manager;
+        }
 
         private uint CreateRequest(
-            LiteNetLibResponseHandler responseHandler,
-            ResponseDelegate<INetSerializable> responseDelegate,
+            IResponseInvoker responseInvoker,
+            ResponseDelegate<object> responseDelegate,
             int millisecondsTimeout)
         {
             uint requestId = nextRequestId++;
             // Get response callback by request type
-            requestCallbacks.TryAdd(requestId, new LiteNetLibRequestCallback(requestId, this, responseHandler, responseDelegate));
-            RequestTimeout(requestId, millisecondsTimeout).Forget();
+            requestCallbacks.TryAdd(requestId, new RequestCallback(requestId, this, responseInvoker, responseDelegate));
+            RequestTimeout(requestId, millisecondsTimeout);
             return requestId;
         }
 
-        private async UniTaskVoid RequestTimeout(uint requestId, int millisecondsTimeout)
+        private async void RequestTimeout(uint requestId, int millisecondsTimeout)
         {
             if (millisecondsTimeout > 0)
             {
-                await UniTask.Delay(millisecondsTimeout);
-                LiteNetLibRequestCallback callback;
-                if (requestCallbacks.TryRemove(requestId, out callback))
+                await Task.Delay(millisecondsTimeout);
+                if (requestCallbacks.TryRemove(requestId, out RequestCallback callback))
                     callback.ResponseTimeout();
             }
         }
 
         protected bool CreateAndWriteRequest<TRequest>(
-            NetDataWriter writer,
+            Writer writer,
             ushort requestType,
             TRequest request,
-            ResponseDelegate<INetSerializable> responseDelegate,
+            ResponseDelegate<object> responseDelegate,
             int millisecondsTimeout,
             SerializerDelegate extraRequestSerializer)
-            where TRequest : INetSerializable, new()
+            where TRequest : new()
         {
-            if (!responseHandlers.ContainsKey(requestType))
+            if (!responseInvokers.ContainsKey(requestType))
             {
                 responseDelegate.Invoke(new ResponseHandlerData(nextRequestId++, this, -1, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
-                Logging.LogError($"Cannot create request. Request type: {requestType} not registered.");
+                Debug.LogError($"Cannot create request. Request type: {requestType} not registered.");
                 return false;
             }
-            if (!responseHandlers[requestType].IsRequestTypeValid(typeof(TRequest)))
+            if (!responseInvokers[requestType].IsRequestTypeValid(typeof(TRequest)))
             {
                 responseDelegate.Invoke(new ResponseHandlerData(nextRequestId++, this, -1, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
-                Logging.LogError($"Cannot create request. Request type: {requestType}, {typeof(TRequest)} is not valid message type.");
+                Debug.LogError($"Cannot create request. Request type: {requestType}, {typeof(TRequest)} is not valid message type.");
                 return false;
             }
             // Create request
-            uint requestId = CreateRequest(responseHandlers[requestType], responseDelegate, millisecondsTimeout);
+            uint requestId = CreateRequest(responseInvokers[requestType], responseDelegate, millisecondsTimeout);
             // Write request
             writer.Reset();
-            writer.PutPackedUShort(RequestMessageType);
-            writer.PutPackedUShort(requestType);
-            writer.PutPackedUInt(requestId);
-            writer.Put(request);
+            writer.Write(manager.RequestPacketId);
+            writer.Write(requestType);
+            writer.Write(requestId);
+            writer.Write(request);
             if (extraRequestSerializer != null)
                 extraRequestSerializer.Invoke(writer);
             return true;
         }
 
-        private void ProceedRequest(
-            long connectionId,
-            NetDataReader reader)
+        private void ProceedRequest(NetworkConnection networkConnection, Reader reader)
         {
-            ushort requestType = reader.GetPackedUShort();
-            uint requestId = reader.GetPackedUInt();
-            if (!requestHandlers.ContainsKey(requestType))
+            ushort requestType = reader.ReadUInt16();
+            uint requestId = reader.ReadUInt32();
+            if (!requestInvokers.ContainsKey(requestType))
             {
                 // No request-response handler
-                RequestProceeded(connectionId, requestId, AckResponseCode.Unimplemented, EmptyMessage.Value, null);
-                Logging.LogError($"Cannot proceed request {requestType} not registered.");
+                RequestProceeded(networkConnection, requestId, AckResponseCode.Unimplemented, EmptyMessage.Value, null);
+                Debug.LogError($"Cannot proceed request {requestType} not registered.");
                 return;
             }
             // Invoke request and create response
-            requestHandlers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, connectionId, reader), RequestProceeded);
+            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, reader), RequestProceeded);
         }
 
-        private void RequestProceeded(long connectionId, uint requestId, AckResponseCode responseCode, INetSerializable response, SerializerDelegate responseSerializer)
+        private void RequestProceeded(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, object response, SerializerDelegate extraResponseSerializer)
         {
             // Write response
             Writer.Reset();
-            Writer.PutPackedUShort(ResponseMessageType);
-            Writer.PutPackedUInt(requestId);
-            Writer.PutValue(responseCode);
-            Writer.Put(response);
-            if (responseSerializer != null)
-                responseSerializer.Invoke(Writer);
+            Writer.Write(manager.ResponsePacketId);
+            Writer.Write(requestId);
+            Writer.Write(responseCode);
+            Writer.Write(response);
+            if (extraResponseSerializer != null)
+                extraResponseSerializer.Invoke(Writer);
             // Send response
-            SendMessage(connectionId, 0, DeliveryMethod.ReliableUnordered, Writer);
+            if (networkConnection == null)
+                manager.NetworkManager.TransportManager.SendToServer((byte)Channel.Reliable, Writer.GetArraySegment());
+            else
+                manager.NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, Writer.GetArraySegment(), networkConnection);
         }
 
-        private void ProceedResponse(long connectionId, NetDataReader reader)
+        private void ProceedResponse(long connectionId, Reader reader)
         {
-            uint requestId = reader.GetPackedUInt();
-            AckResponseCode responseCode = reader.GetValue<AckResponseCode>();
+            uint requestId = reader.ReadUInt32();
+            AckResponseCode responseCode = (AckResponseCode)reader.ReadByte();
             if (requestCallbacks.ContainsKey(requestId))
             {
                 requestCallbacks[requestId].Response(connectionId, reader, responseCode);
@@ -120,15 +133,15 @@ namespace Insthync.FishNet
         public void RegisterRequestHandler<TRequest, TResponse>(
             ushort requestType,
             RequestDelegate<TRequest, TResponse> handlerDelegate)
-            where TRequest : INetSerializable, new()
-            where TResponse : INetSerializable, new()
+            where TRequest : new()
+            where TResponse : new()
         {
-            requestHandlerInvokers[requestType] = new RequestHandlerInvoker<TRequest, TResponse>(handlerDelegate);
+            requestInvokers[requestType] = new RequestInvoker<TRequest, TResponse>(handlerDelegate);
         }
 
         public void UnregisterRequestHandler(ushort requestType)
         {
-            requestHandlerInvokers.Remove(requestType);
+            requestInvokers.Remove(requestType);
         }
 
         /// <summary>
@@ -141,15 +154,15 @@ namespace Insthync.FishNet
         public void RegisterResponseHandler<TRequest, TResponse>(
             ushort requestType,
             ResponseDelegate<TResponse> handlerDelegate = null)
-            where TRequest : INetSerializable, new()
-            where TResponse : INetSerializable, new()
+            where TRequest : new()
+            where TResponse : new()
         {
-            responseHandlerInvokers[requestType] = new ResponseHandlerInvoker<TRequest, TResponse>(handlerDelegate);
+            responseInvokers[requestType] = new ResponseInvoker<TRequest, TResponse>(handlerDelegate);
         }
 
         public void UnregisterResponseHandler(ushort requestType)
         {
-            responseHandlerInvokers.Remove(requestType);
+            responseInvokers.Remove(requestType);
         }
     }
 }

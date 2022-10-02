@@ -1,4 +1,6 @@
-namespace Insthync.FishNet
+using FishNet.Connection;
+
+namespace FishNet.Insthync.ResquestResponse
 {
-    public delegate void RequestProceededDelegate(long connectionId, uint requestId, AckResponseCode responseCode, object response);
+    public delegate void RequestProceededDelegate(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, object response, SerializerDelegate extraResponseSerializer);
 }

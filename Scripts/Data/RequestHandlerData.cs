@@ -1,19 +1,22 @@
+using FishNet.Connection;
 using FishNet.Serializing;
 
-namespace Insthync.FishNet
+namespace FishNet.Insthync.ResquestResponse
 {
     public struct RequestHandlerData
     {
         public ushort RequestType { get; private set; }
         public uint RequestId { get; private set; }
-        public long ConnectionId { get; private set; }
+        public ReqResHandler ReqResHandler { get; private set; }
+        public NetworkConnection NetworkConnection { get; private set; }
         public Reader Reader { get; private set; }
 
-        public RequestHandlerData(ushort requestType, uint requestId, long connectionId, Reader reader)
+        public RequestHandlerData(ushort requestType, uint requestId, ReqResHandler reqResHandler, NetworkConnection networkConnection, Reader reader)
         {
             RequestType = requestType;
             RequestId = requestId;
-            ConnectionId = connectionId;
+            ReqResHandler = reqResHandler;
+            NetworkConnection = networkConnection;
             Reader = reader;
         }
     }
