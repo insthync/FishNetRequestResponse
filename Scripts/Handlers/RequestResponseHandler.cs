@@ -10,8 +10,8 @@ namespace FishNet.Insthync.ResquestResponse
     // TODO: Implement better logger
     public class RequestResponseHandler
     {
-        protected readonly RequestResponseManager manager;
-        protected readonly Writer writer = new Writer();
+        public readonly RequestResponseManager Manager;
+        public readonly Writer Writer = new Writer();
         protected readonly Dictionary<ushort, IRequestInvoker> requestInvokers = new Dictionary<ushort, IRequestInvoker>();
         protected readonly Dictionary<ushort, IResponseInvoker> responseInvokers = new Dictionary<ushort, IResponseInvoker>();
         protected readonly ConcurrentDictionary<uint, RequestCallback> requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
@@ -19,7 +19,7 @@ namespace FishNet.Insthync.ResquestResponse
 
         public RequestResponseHandler(RequestResponseManager manager)
         {
-            this.manager = manager;
+            this.Manager = manager;
         }
 
         /// <summary>
@@ -87,21 +87,21 @@ namespace FishNet.Insthync.ResquestResponse
             uint requestId = CreateRequest(responseInvokers[requestType], responseHandler);
             HandleRequestTimeout(requestId, millisecondsTimeout);
             // Write request
-            writer.Reset();
-            writer.Write(request);
+            Writer.Reset();
+            Writer.Write(request);
             if (extraRequestSerializer != null)
-                extraRequestSerializer.Invoke(writer);
+                extraRequestSerializer.Invoke(Writer);
             RequestMessage requestMessage = new RequestMessage()
             {
                 requestType = requestType,
                 requestId = requestId,
-                data = writer.GetArraySegment().ToArray(),
+                data = Writer.GetArraySegment().ToArray(),
             };
             // Send request
             if (networkConnection == null)
-                manager.NetworkManager.ClientManager.Broadcast(requestMessage);
+                Manager.NetworkManager.ClientManager.Broadcast(requestMessage);
             else
-                manager.NetworkManager.ServerManager.Broadcast(networkConnection, requestMessage);
+                Manager.NetworkManager.ServerManager.Broadcast(networkConnection, requestMessage);
             return true;
         }
 
@@ -117,40 +117,20 @@ namespace FishNet.Insthync.ResquestResponse
             if (!requestInvokers.ContainsKey(requestType))
             {
                 // No request-response handler
-                RequestProceeded(networkConnection, requestId, AckResponseCode.Unimplemented, EmptyMessage.Value, null);
+                ResponseMessage responseMessage = new ResponseMessage()
+                {
+                    requestId = requestId,
+                    responseCode = AckResponseCode.Unimplemented,
+                };
+                if (networkConnection == null)
+                    Manager.NetworkManager.ClientManager.Broadcast(responseMessage);
+                else
+                    Manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
                 Debug.LogError($"Cannot proceed request {requestType} not registered.");
                 return;
             }
             // Invoke request and create response
-            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, manager.NetworkManager)), RequestProceeded);
-        }
-
-        /// <summary>
-        /// Send response to the requester
-        /// </summary>
-        /// <param name="networkConnection"></param>
-        /// <param name="requestId"></param>
-        /// <param name="responseCode"></param>
-        /// <param name="response"></param>
-        /// <param name="extraResponseSerializer"></param>
-        private void RequestProceeded(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, object response, SerializerDelegate extraResponseSerializer)
-        {
-            // Write response
-            writer.Reset();
-            writer.Write(response);
-            if (extraResponseSerializer != null)
-                extraResponseSerializer.Invoke(writer);
-            ResponseMessage responseMessage = new ResponseMessage()
-            {
-                requestId = requestId,
-                responseCode = responseCode,
-                data = writer.GetArraySegment().ToArray(),
-            };
-            // Send response
-            if (networkConnection == null)
-                manager.NetworkManager.ClientManager.Broadcast(responseMessage);
-            else
-                manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
+            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, Manager.NetworkManager)));
         }
 
         /// <summary>
@@ -164,7 +144,7 @@ namespace FishNet.Insthync.ResquestResponse
             AckResponseCode responseCode = responseMessage.responseCode;
             if (requestCallbacks.ContainsKey(requestId))
             {
-                requestCallbacks[requestId].Response(networkConnection, new Reader(responseMessage.data, manager.NetworkManager), responseCode);
+                requestCallbacks[requestId].Response(networkConnection, new Reader(responseMessage.data, Manager.NetworkManager), responseCode);
                 requestCallbacks.TryRemove(requestId, out _);
             }
         }
@@ -182,7 +162,7 @@ namespace FishNet.Insthync.ResquestResponse
             where TRequest : new()
             where TResponse : new()
         {
-            requestInvokers[requestType] = new RequestInvoker<TRequest, TResponse>(handlerDelegate);
+            requestInvokers[requestType] = new RequestInvoker<TRequest, TResponse>(this, handlerDelegate);
         }
 
         public void UnregisterRequestHandler(ushort requestType)
