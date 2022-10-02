@@ -1,3 +1,4 @@
+using FishNet.Connection;
 using FishNet.Serializing;
 
 namespace FishNet.Insthync.ResquestResponse
@@ -23,12 +24,12 @@ namespace FishNet.Insthync.ResquestResponse
 
         public void ResponseTimeout()
         {
-            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, -1, null), AckResponseCode.Timeout, ResponseHandler);
+            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, null, null), AckResponseCode.Timeout, ResponseHandler);
         }
 
-        public void Response(long connectionId, Reader reader, AckResponseCode responseCode)
+        public void Response(NetworkConnection networkConnection, Reader reader, AckResponseCode responseCode)
         {
-            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, connectionId, reader), responseCode, ResponseHandler);
+            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, networkConnection, reader), responseCode, ResponseHandler);
         }
     }
 }

@@ -13,7 +13,7 @@ namespace FishNet.Insthync.ResquestResponse
     public class ReqResHandler
     {
         protected readonly ReqResManager manager;
-        protected readonly Writer Writer = new Writer();
+        protected readonly Writer writer = new Writer();
         protected readonly Dictionary<ushort, IRequestInvoker> requestInvokers = new Dictionary<ushort, IRequestInvoker>();
         protected readonly Dictionary<ushort, IResponseInvoker> responseInvokers = new Dictionary<ushort, IResponseInvoker>();
         protected readonly ConcurrentDictionary<uint, RequestCallback> requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
@@ -24,19 +24,26 @@ namespace FishNet.Insthync.ResquestResponse
             this.manager = manager;
         }
 
-        private uint CreateRequest(
-            IResponseInvoker responseInvoker,
-            ResponseDelegate<object> responseDelegate,
-            int millisecondsTimeout)
+        /// <summary>
+        /// Create new request callback with a new request ID
+        /// </summary>
+        /// <param name="responseInvoker"></param>
+        /// <param name="responseHandler"></param>
+        /// <returns></returns>
+        private uint CreateRequest(IResponseInvoker responseInvoker, ResponseDelegate<object> responseHandler)
         {
             uint requestId = nextRequestId++;
             // Get response callback by request type
-            requestCallbacks.TryAdd(requestId, new RequestCallback(requestId, this, responseInvoker, responseDelegate));
-            RequestTimeout(requestId, millisecondsTimeout);
+            requestCallbacks.TryAdd(requestId, new RequestCallback(requestId, this, responseInvoker, responseHandler));
             return requestId;
         }
 
-        private async void RequestTimeout(uint requestId, int millisecondsTimeout)
+        /// <summary>
+        /// Delay and do something when request timeout
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <param name="millisecondsTimeout"></param>
+        private async void HandleRequestTimeout(uint requestId, int millisecondsTimeout)
         {
             if (millisecondsTimeout > 0)
             {
@@ -46,44 +53,64 @@ namespace FishNet.Insthync.ResquestResponse
             }
         }
 
-        protected bool CreateAndWriteRequest<TRequest>(
-            Writer writer,
+        /// <summary>
+        /// Create a new request and send to taget
+        /// </summary>
+        /// <typeparam name="TRequest"></typeparam>
+        /// <param name="networkConnection"></param>
+        /// <param name="requestType"></param>
+        /// <param name="request"></param>
+        /// <param name="extraRequestSerializer"></param>
+        /// <param name="responseHandler"></param>
+        /// <param name="millisecondsTimeout"></param>
+        /// <returns></returns>
+        public bool CreateAndSendRequest<TRequest>(
+            NetworkConnection networkConnection,
             ushort requestType,
             TRequest request,
-            ResponseDelegate<object> responseDelegate,
-            int millisecondsTimeout,
-            SerializerDelegate extraRequestSerializer)
+            SerializerDelegate extraRequestSerializer,
+            ResponseDelegate<object> responseHandler,
+            int millisecondsTimeout)
             where TRequest : new()
         {
             if (!responseInvokers.ContainsKey(requestType))
             {
-                responseDelegate.Invoke(new ResponseHandlerData(nextRequestId++, this, -1, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
+                responseHandler.Invoke(new ResponseHandlerData(nextRequestId++, this, null, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
                 Debug.LogError($"Cannot create request. Request type: {requestType} not registered.");
                 return false;
             }
             if (!responseInvokers[requestType].IsRequestTypeValid(typeof(TRequest)))
             {
-                responseDelegate.Invoke(new ResponseHandlerData(nextRequestId++, this, -1, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
+                responseHandler.Invoke(new ResponseHandlerData(nextRequestId++, this, null, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
                 Debug.LogError($"Cannot create request. Request type: {requestType}, {typeof(TRequest)} is not valid message type.");
                 return false;
             }
             // Create request
-            uint requestId = CreateRequest(responseInvokers[requestType], responseDelegate, millisecondsTimeout);
+            uint requestId = CreateRequest(responseInvokers[requestType], responseHandler);
             // Write request
             writer.Reset();
-            writer.Write(manager.RequestPacketId);
-            writer.Write(requestType);
-            writer.Write(requestId);
             writer.Write(request);
             if (extraRequestSerializer != null)
                 extraRequestSerializer.Invoke(writer);
+            RequestMessage requestMessage = new RequestMessage()
+            {
+                requestType = requestType,
+                requestId = requestId,
+                data = writer.GetArraySegment().ToArray(),
+            };
+            // Send request
+            if (networkConnection == null)
+                manager.NetworkManager.ClientManager.Broadcast(requestMessage);
+            else
+                manager.NetworkManager.ServerManager.Broadcast(networkConnection, requestMessage);
+            HandleRequestTimeout(requestId, millisecondsTimeout);
             return true;
         }
 
-        private void ProceedRequest(NetworkConnection networkConnection, Reader reader)
+        public void ProceedRequest(NetworkConnection networkConnection, RequestMessage requestMessage)
         {
-            ushort requestType = reader.ReadUInt16();
-            uint requestId = reader.ReadUInt32();
+            ushort requestType = requestMessage.requestType;
+            uint requestId = requestMessage.requestId;
             if (!requestInvokers.ContainsKey(requestType))
             {
                 // No request-response handler
@@ -92,33 +119,36 @@ namespace FishNet.Insthync.ResquestResponse
                 return;
             }
             // Invoke request and create response
-            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, reader), RequestProceeded);
+            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, manager.NetworkManager)), RequestProceeded);
         }
 
         private void RequestProceeded(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, object response, SerializerDelegate extraResponseSerializer)
         {
             // Write response
-            Writer.Reset();
-            Writer.Write(manager.ResponsePacketId);
-            Writer.Write(requestId);
-            Writer.Write(responseCode);
-            Writer.Write(response);
+            writer.Reset();
+            writer.Write(response);
             if (extraResponseSerializer != null)
-                extraResponseSerializer.Invoke(Writer);
+                extraResponseSerializer.Invoke(writer);
+            ResponseMessage responseMessage = new ResponseMessage()
+            {
+                requestId = requestId,
+                responseCode = responseCode,
+                data = writer.GetArraySegment().ToArray(),
+            };
             // Send response
             if (networkConnection == null)
-                manager.NetworkManager.TransportManager.SendToServer((byte)Channel.Reliable, Writer.GetArraySegment());
+                manager.NetworkManager.ClientManager.Broadcast(responseMessage);
             else
-                manager.NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, Writer.GetArraySegment(), networkConnection);
+                manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
         }
 
-        private void ProceedResponse(long connectionId, Reader reader)
+        public void ProceedResponse(NetworkConnection networkConnection, ResponseMessage responseMessage)
         {
-            uint requestId = reader.ReadUInt32();
-            AckResponseCode responseCode = (AckResponseCode)reader.ReadByte();
+            uint requestId = responseMessage.requestId;
+            AckResponseCode responseCode = responseMessage.responseCode;
             if (requestCallbacks.ContainsKey(requestId))
             {
-                requestCallbacks[requestId].Response(connectionId, reader, responseCode);
+                requestCallbacks[requestId].Response(networkConnection, new Reader(responseMessage.data, manager.NetworkManager), responseCode);
                 requestCallbacks.TryRemove(requestId, out _);
             }
         }

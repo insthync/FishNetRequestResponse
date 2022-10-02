@@ -1,3 +1,4 @@
+using FishNet.Connection;
 using FishNet.Serializing;
 
 namespace FishNet.Insthync.ResquestResponse
@@ -6,14 +7,14 @@ namespace FishNet.Insthync.ResquestResponse
     {
         public uint RequestId { get; private set; }
         public ReqResHandler ReqResHandler { get; private set; }
-        public long ConnectionId { get; private set; }
+        public NetworkConnection NetworkConnection { get; private set; }
         public Reader Reader { get; private set; }
 
-        public ResponseHandlerData(uint requestId, ReqResHandler reqResHandler, long connectionId, Reader reader)
+        public ResponseHandlerData(uint requestId, ReqResHandler reqResHandler, NetworkConnection networkConnection, Reader reader)
         {
             RequestId = requestId;
             ReqResHandler = reqResHandler;
-            ConnectionId = connectionId;
+            NetworkConnection = networkConnection;
             Reader = reader;
         }
     }
