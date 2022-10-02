@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace FishNet.Insthync.ResquestResponse
 {
-    public class ReqResManager : MonoBehaviour
+    public class RequestResponseManager : MonoBehaviour
     {
         [SerializeField]
         private NetworkManager networkManager;
@@ -15,13 +15,13 @@ namespace FishNet.Insthync.ResquestResponse
         public int clientRequestTimeoutInMilliseconds = 30000;
         public int serverRequestTimeoutInMilliseconds = 30000;
 
-        private ReqResHandler _serverReqResHandler;
-        private ReqResHandler _clientReqResHandler;
+        private RequestResponseHandler _serverReqResHandler;
+        private RequestResponseHandler _clientReqResHandler;
 
         private void Awake()
         {
-            _serverReqResHandler = new ReqResHandler(this);
-            _clientReqResHandler = new ReqResHandler(this);
+            _serverReqResHandler = new RequestResponseHandler(this);
+            _clientReqResHandler = new RequestResponseHandler(this);
         }
 
         private void Start()
@@ -30,19 +30,6 @@ namespace FishNet.Insthync.ResquestResponse
             networkManager.ServerManager.RegisterBroadcast<ResponseMessage>(ServerResponseHandler);
             networkManager.ClientManager.RegisterBroadcast<RequestMessage>(ClientRequestHandler);
             networkManager.ClientManager.RegisterBroadcast<ResponseMessage>(ClientResponseHandler);
-        }
-
-        private void FixedUpdate()
-        {
-            if (networkManager.IsServer)
-            {
-
-            }
-
-            if (networkManager.IsClient)
-            {
-
-            }
         }
 
         private void ServerRequestHandler(NetworkConnection networkConnection, RequestMessage msg)

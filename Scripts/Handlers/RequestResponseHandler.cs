@@ -1,7 +1,5 @@
 using FishNet.Connection;
 using FishNet.Serializing;
-using FishNet.Transporting;
-using LiteNetLib;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -10,16 +8,16 @@ using UnityEngine;
 namespace FishNet.Insthync.ResquestResponse
 {
     // TODO: Implement better logger
-    public class ReqResHandler
+    public class RequestResponseHandler
     {
-        protected readonly ReqResManager manager;
+        protected readonly RequestResponseManager manager;
         protected readonly Writer writer = new Writer();
         protected readonly Dictionary<ushort, IRequestInvoker> requestInvokers = new Dictionary<ushort, IRequestInvoker>();
         protected readonly Dictionary<ushort, IResponseInvoker> responseInvokers = new Dictionary<ushort, IResponseInvoker>();
         protected readonly ConcurrentDictionary<uint, RequestCallback> requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
         protected uint nextRequestId;
 
-        public ReqResHandler(ReqResManager manager)
+        public RequestResponseHandler(RequestResponseManager manager)
         {
             this.manager = manager;
         }

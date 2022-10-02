@@ -6,13 +6,13 @@ namespace FishNet.Insthync.ResquestResponse
     public struct RequestCallback
     {
         public uint RequestId { get; private set; }
-        public ReqResHandler ReqResHandler { get; private set; }
+        public RequestResponseHandler ReqResHandler { get; private set; }
         public IResponseInvoker ResponseInvoker { get; private set; }
         public ResponseDelegate<object> ResponseHandler { get; private set; }
 
         public RequestCallback(
             uint requestId,
-            ReqResHandler reqResHandler,
+            RequestResponseHandler reqResHandler,
             IResponseInvoker responseInvoker,
             ResponseDelegate<object> responseHandler)
         {
