@@ -1,5 +1,5 @@
 # FishNetReqRes
-A Request and response addon for FishNet
+A Request and response addon for [FishNet](https://github.com/FirstGearGames/FishNet)
 
 ## How to use it
 
