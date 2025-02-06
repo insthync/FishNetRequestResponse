@@ -3,7 +3,7 @@ using FishNet.Serializing;
 
 namespace FishNet.Insthync.ResquestResponse
 {
-    public struct ResponseHandlerData
+    public class ResponseHandlerData
     {
         public uint RequestId { get; private set; }
         public RequestResponseHandler ReqResHandler { get; private set; }

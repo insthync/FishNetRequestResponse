@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishNet.Insthync.ResquestResponse
@@ -56,20 +57,79 @@ namespace FishNet.Insthync.ResquestResponse
             ushort requestType,
             TRequest request,
             SerializerDelegate extraRequestSerializer = null,
-            ResponseDelegate<object> responseHandler = null)
+            ResponseDelegate<object> responseHandler = null,
+            int millisecondsTimeout = 0)
             where TRequest : new()
         {
-            return _serverReqResHandler.CreateAndSendRequest(networkConnection, requestType, request, extraRequestSerializer, responseHandler, serverRequestTimeoutInMilliseconds);
+            if (millisecondsTimeout <= 0)
+                millisecondsTimeout = serverRequestTimeoutInMilliseconds;
+            return _serverReqResHandler.CreateAndSendRequest(networkConnection, requestType, request, extraRequestSerializer, responseHandler, millisecondsTimeout);
+        }
+
+        public async Task<AsyncResponseData<TResponse>> ServerSendRequestAsync<TRequest, TResponse>(
+            NetworkConnection networkConnection,
+            ushort requestType,
+            TRequest request,
+            SerializerDelegate extraSerializer = null,
+            int millisecondsTimeout = 0)
+            where TRequest : new()
+            where TResponse : new()
+        {
+            if (millisecondsTimeout <= 0)
+                millisecondsTimeout = serverRequestTimeoutInMilliseconds;
+            bool done = false;
+            AsyncResponseData<TResponse> responseData = default;
+            // Create and send request
+            _serverReqResHandler.CreateAndSendRequest(networkConnection, requestType, request, extraSerializer, (requestHandler, responseCode, response) =>
+            {
+                if (!(response is TResponse))
+                    response = default(TResponse);
+                responseData = new AsyncResponseData<TResponse>(requestHandler, responseCode, (TResponse)response);
+                done = true;
+            }, millisecondsTimeout);
+            // Wait for response
+            do { await Task.Delay(100); } while (!done);
+            // Return response data
+            return responseData;
         }
 
         public bool ClientSendRequest<TRequest>(
             ushort requestType,
             TRequest request,
             SerializerDelegate extraRequestSerializer = null,
-            ResponseDelegate<object> responseHandler = null)
+            ResponseDelegate<object> responseHandler = null,
+            int millisecondsTimeout = 0)
             where TRequest : new()
         {
-            return _clientReqResHandler.CreateAndSendRequest(null, requestType, request, extraRequestSerializer, responseHandler, clientRequestTimeoutInMilliseconds);
+            if (millisecondsTimeout <= 0)
+                millisecondsTimeout = clientRequestTimeoutInMilliseconds;
+            return _clientReqResHandler.CreateAndSendRequest(null, requestType, request, extraRequestSerializer, responseHandler, millisecondsTimeout);
+        }
+
+        public async Task<AsyncResponseData<TResponse>> ClientSendRequestAsync<TRequest, TResponse>(
+            ushort requestType,
+            TRequest request,
+            SerializerDelegate extraSerializer = null,
+            int millisecondsTimeout = 0)
+            where TRequest : new()
+            where TResponse : new()
+        {
+            if (millisecondsTimeout <= 0)
+                millisecondsTimeout = clientRequestTimeoutInMilliseconds;
+            bool done = false;
+            AsyncResponseData<TResponse> responseData = default;
+            // Create and send request
+            _clientReqResHandler.CreateAndSendRequest(null, requestType, request, extraSerializer, (requestHandler, responseCode, response) =>
+            {
+                if (!(response is TResponse))
+                    response = default(TResponse);
+                responseData = new AsyncResponseData<TResponse>(requestHandler, responseCode, (TResponse)response);
+                done = true;
+            }, millisecondsTimeout);
+            // Wait for response
+            do { await Task.Delay(100); } while (!done);
+            // Return response data
+            return responseData;
         }
 
         public void RegisterRequestToServer<TRequest, TResponse>(ushort reqType, RequestDelegate<TRequest, TResponse> requestHandler, ResponseDelegate<TResponse> responseHandler = null)

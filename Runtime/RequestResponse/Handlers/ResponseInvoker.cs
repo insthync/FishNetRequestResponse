@@ -4,22 +4,22 @@ namespace FishNet.Insthync.ResquestResponse
 {
     public interface IResponseInvoker
     {
-        void InvokeResponse(ResponseHandlerData responseHandler, ResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler);
+        void InvokeResponse(ResponseHandlerData responseHandlerData, ResponseCode responseCode, ResponseDelegate<object> responseHandler);
         bool IsRequestTypeValid(Type type);
     }
 
-    public struct ResponseInvoker<TRequest, TResponse> : IResponseInvoker
+    public class ResponseInvoker<TRequest, TResponse> : IResponseInvoker
         where TRequest : new()
         where TResponse : new()
     {
-        private ResponseDelegate<TResponse> responseDelegate;
+        private ResponseDelegate<TResponse> _responseDelegate;
 
         public ResponseInvoker(ResponseDelegate<TResponse> responseDelegate)
         {
-            this.responseDelegate = responseDelegate;
+            _responseDelegate = responseDelegate;
         }
 
-        public void InvokeResponse(ResponseHandlerData responseHandlerData, ResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler)
+        public void InvokeResponse(ResponseHandlerData responseHandlerData, ResponseCode responseCode, ResponseDelegate<object> responseHandler)
         {
             TResponse response = new TResponse();
             if (responseCode != ResponseCode.Timeout &&
@@ -28,10 +28,10 @@ namespace FishNet.Insthync.ResquestResponse
                 if (responseHandlerData.Reader != null)
                     response = responseHandlerData.Reader.Read<TResponse>();
             }
-            if (responseDelegate != null)
-                responseDelegate.Invoke(responseHandlerData, responseCode, response);
-            if (anotherResponseHandler != null)
-                anotherResponseHandler.Invoke(responseHandlerData, responseCode, response);
+            if (_responseDelegate != null)
+                _responseDelegate.Invoke(responseHandlerData, responseCode, response);
+            if (responseHandler != null)
+                responseHandler.Invoke(responseHandlerData, responseCode, response);
         }
 
         public bool IsRequestTypeValid(Type type)

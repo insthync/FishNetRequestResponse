@@ -11,13 +11,13 @@ namespace FishNet.Insthync.ResquestResponse
         where TRequest : new()
         where TResponse : new()
     {
-        private RequestResponseHandler handler;
-        private RequestDelegate<TRequest, TResponse> requestHandler;
+        private RequestResponseHandler _handler;
+        private RequestDelegate<TRequest, TResponse> _requestHandler;
 
         public RequestInvoker(RequestResponseHandler handler, RequestDelegate<TRequest, TResponse> requestHandler)
         {
-            this.handler = handler;
-            this.requestHandler = requestHandler;
+            _handler = handler;
+            _requestHandler = requestHandler;
         }
 
         public void InvokeRequest(RequestHandlerData requestHandlerData)
@@ -25,8 +25,8 @@ namespace FishNet.Insthync.ResquestResponse
             TRequest request = new TRequest();
             if (requestHandlerData.Reader != null)
                 request = requestHandlerData.Reader.Read<TRequest>();
-            if (requestHandler != null)
-                requestHandler.Invoke(requestHandlerData, request, (responseCode, response, extraResponseSerializer) => RequestProceeded(requestHandlerData.NetworkConnection, requestHandlerData.RequestId, responseCode, response, extraResponseSerializer));
+            if (_requestHandler != null)
+                _requestHandler.Invoke(requestHandlerData, request, (responseCode, response, extraResponseSerializer) => RequestProceeded(requestHandlerData.NetworkConnection, requestHandlerData.RequestId, responseCode, response, extraResponseSerializer));
         }
 
         /// <summary>
@@ -40,21 +40,21 @@ namespace FishNet.Insthync.ResquestResponse
         private void RequestProceeded(NetworkConnection networkConnection, uint requestId, ResponseCode responseCode, TResponse response, SerializerDelegate extraResponseSerializer)
         {
             // Write response
-            handler.Writer.Reset();
-            handler.Writer.Write(response);
+            _handler.Writer.Clear();
+            _handler.Writer.Write(response);
             if (extraResponseSerializer != null)
-                extraResponseSerializer.Invoke(handler.Writer);
+                extraResponseSerializer.Invoke(_handler.Writer);
             ResponseMessage responseMessage = new ResponseMessage()
             {
                 requestId = requestId,
                 responseCode = responseCode,
-                data = handler.Writer.GetArraySegment().ToArray(),
+                data = _handler.Writer.GetArraySegment().ToArray(),
             };
             // Send response
             if (networkConnection == null)
-                handler.Manager.NetworkManager.ClientManager.Broadcast(responseMessage);
+                _handler.Manager.NetworkManager.ClientManager.Broadcast(responseMessage);
             else
-                handler.Manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
+                _handler.Manager.NetworkManager.ServerManager.Broadcast(networkConnection, responseMessage);
         }
     }
 }

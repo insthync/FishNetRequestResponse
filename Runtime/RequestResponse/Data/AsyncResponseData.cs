@@ -1,6 +1,6 @@
 namespace FishNet.Insthync.ResquestResponse
 {
-    public struct AsyncResponseData<TResponse>
+    public class AsyncResponseData<TResponse>
     {
         public ResponseHandlerData RequestHandler { get; private set; }
         public ResponseCode ResponseCode { get; private set; }
