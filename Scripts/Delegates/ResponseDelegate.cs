@@ -1,4 +1,4 @@
 namespace FishNet.Insthync.ResquestResponse
 {
-    public delegate void ResponseDelegate<TResponse>(ResponseHandlerData requestHandler, AckResponseCode responseCode, TResponse response);
+    public delegate void ResponseDelegate<TResponse>(ResponseHandlerData requestHandler, ResponseCode responseCode, TResponse response);
 }

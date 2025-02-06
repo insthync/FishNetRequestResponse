@@ -4,7 +4,7 @@ namespace FishNet.Insthync.ResquestResponse
 {
     public interface IResponseInvoker
     {
-        void InvokeResponse(ResponseHandlerData responseHandler, AckResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler);
+        void InvokeResponse(ResponseHandlerData responseHandler, ResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler);
         bool IsRequestTypeValid(Type type);
     }
 
@@ -19,11 +19,11 @@ namespace FishNet.Insthync.ResquestResponse
             this.responseDelegate = responseDelegate;
         }
 
-        public void InvokeResponse(ResponseHandlerData responseHandlerData, AckResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler)
+        public void InvokeResponse(ResponseHandlerData responseHandlerData, ResponseCode responseCode, ResponseDelegate<object> anotherResponseHandler)
         {
             TResponse response = new TResponse();
-            if (responseCode != AckResponseCode.Timeout &&
-                responseCode != AckResponseCode.Unimplemented)
+            if (responseCode != ResponseCode.Timeout &&
+                responseCode != ResponseCode.Unimplemented)
             {
                 if (responseHandlerData.Reader != null)
                     response = responseHandlerData.Reader.Read<TResponse>();

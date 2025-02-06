@@ -1,6 +1,6 @@
 namespace FishNet.Insthync.ResquestResponse
 {
-    public enum AckResponseCode : byte
+    public enum ResponseCode : byte
     {
         Success = 0,
         Timeout = 1,

@@ -1,7 +1,6 @@
 using FishNet.Connection;
 using FishNet.Managing;
-using FishNet.Managing.Client;
-using FishNet.Serializing;
+using FishNet.Transporting;
 using UnityEngine;
 
 namespace FishNet.Insthync.ResquestResponse
@@ -32,22 +31,22 @@ namespace FishNet.Insthync.ResquestResponse
             networkManager.ClientManager.RegisterBroadcast<ResponseMessage>(ClientResponseHandler);
         }
 
-        private void ServerRequestHandler(NetworkConnection networkConnection, RequestMessage msg)
+        private void ServerRequestHandler(NetworkConnection networkConnection, RequestMessage msg, Channel channel)
         {
             _serverReqResHandler.ProceedRequest(networkConnection, msg);
         }
 
-        private void ServerResponseHandler(NetworkConnection networkConnection, ResponseMessage msg)
+        private void ServerResponseHandler(NetworkConnection networkConnection, ResponseMessage msg, Channel channel)
         {
             _serverReqResHandler.ProceedResponse(networkConnection, msg);
         }
 
-        private void ClientRequestHandler(RequestMessage msg)
+        private void ClientRequestHandler(RequestMessage msg, Channel channel)
         {
             _clientReqResHandler.ProceedRequest(null, msg);
         }
 
-        private void ClientResponseHandler(ResponseMessage msg)
+        private void ClientResponseHandler(ResponseMessage msg, Channel channel)
         {
             _clientReqResHandler.ProceedResponse(null, msg);
         }

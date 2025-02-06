@@ -12,14 +12,14 @@ namespace FishNet.Insthync.ResquestResponse
     {
         public readonly RequestResponseManager Manager;
         public readonly Writer Writer = new Writer();
-        protected readonly Dictionary<ushort, IRequestInvoker> requestInvokers = new Dictionary<ushort, IRequestInvoker>();
-        protected readonly Dictionary<ushort, IResponseInvoker> responseInvokers = new Dictionary<ushort, IResponseInvoker>();
-        protected readonly ConcurrentDictionary<uint, RequestCallback> requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
-        protected uint nextRequestId;
+        protected readonly Dictionary<ushort, IRequestInvoker> _requestInvokers = new Dictionary<ushort, IRequestInvoker>();
+        protected readonly Dictionary<ushort, IResponseInvoker> _responseInvokers = new Dictionary<ushort, IResponseInvoker>();
+        protected readonly ConcurrentDictionary<uint, RequestCallback> _requestCallbacks = new ConcurrentDictionary<uint, RequestCallback>();
+        protected uint _nextRequestId;
 
         public RequestResponseHandler(RequestResponseManager manager)
         {
-            this.Manager = manager;
+            Manager = manager;
         }
 
         /// <summary>
@@ -30,9 +30,9 @@ namespace FishNet.Insthync.ResquestResponse
         /// <returns></returns>
         private uint CreateRequest(IResponseInvoker responseInvoker, ResponseDelegate<object> responseHandler)
         {
-            uint requestId = nextRequestId++;
+            uint requestId = _nextRequestId++;
             // Get response callback by request type
-            requestCallbacks.TryAdd(requestId, new RequestCallback(requestId, this, responseInvoker, responseHandler));
+            _requestCallbacks.TryAdd(requestId, new RequestCallback(requestId, this, responseInvoker, responseHandler));
             return requestId;
         }
 
@@ -46,7 +46,7 @@ namespace FishNet.Insthync.ResquestResponse
             if (millisecondsTimeout > 0)
             {
                 await Task.Delay(millisecondsTimeout);
-                if (requestCallbacks.TryRemove(requestId, out RequestCallback callback))
+                if (_requestCallbacks.TryRemove(requestId, out RequestCallback callback))
                     callback.ResponseTimeout();
             }
         }
@@ -71,23 +71,23 @@ namespace FishNet.Insthync.ResquestResponse
             int millisecondsTimeout)
             where TRequest : new()
         {
-            if (!responseInvokers.ContainsKey(requestType))
+            if (!_responseInvokers.ContainsKey(requestType))
             {
-                responseHandler.Invoke(new ResponseHandlerData(nextRequestId++, this, null, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
+                responseHandler.Invoke(new ResponseHandlerData(_nextRequestId++, this, null, null), ResponseCode.Unimplemented, EmptyMessage.Value);
                 Debug.LogError($"Cannot create request. Request type: {requestType} not registered.");
                 return false;
             }
-            if (!responseInvokers[requestType].IsRequestTypeValid(typeof(TRequest)))
+            if (!_responseInvokers[requestType].IsRequestTypeValid(typeof(TRequest)))
             {
-                responseHandler.Invoke(new ResponseHandlerData(nextRequestId++, this, null, null), AckResponseCode.Unimplemented, EmptyMessage.Value);
+                responseHandler.Invoke(new ResponseHandlerData(_nextRequestId++, this, null, null), ResponseCode.Unimplemented, EmptyMessage.Value);
                 Debug.LogError($"Cannot create request. Request type: {requestType}, {typeof(TRequest)} is not valid message type.");
                 return false;
             }
             // Create request
-            uint requestId = CreateRequest(responseInvokers[requestType], responseHandler);
+            uint requestId = CreateRequest(_responseInvokers[requestType], responseHandler);
             HandleRequestTimeout(requestId, millisecondsTimeout);
             // Write request
-            Writer.Reset();
+            Writer.Clear();
             Writer.Write(request);
             if (extraRequestSerializer != null)
                 extraRequestSerializer.Invoke(Writer);
@@ -114,13 +114,13 @@ namespace FishNet.Insthync.ResquestResponse
         {
             ushort requestType = requestMessage.requestType;
             uint requestId = requestMessage.requestId;
-            if (!requestInvokers.ContainsKey(requestType))
+            if (!_requestInvokers.ContainsKey(requestType))
             {
                 // No request-response handler
                 ResponseMessage responseMessage = new ResponseMessage()
                 {
                     requestId = requestId,
-                    responseCode = AckResponseCode.Unimplemented,
+                    responseCode = ResponseCode.Unimplemented,
                 };
                 if (networkConnection == null)
                     Manager.NetworkManager.ClientManager.Broadcast(responseMessage);
@@ -130,7 +130,7 @@ namespace FishNet.Insthync.ResquestResponse
                 return;
             }
             // Invoke request and create response
-            requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, Manager.NetworkManager)));
+            _requestInvokers[requestType].InvokeRequest(new RequestHandlerData(requestType, requestId, this, networkConnection, new Reader(requestMessage.data, Manager.NetworkManager)));
         }
 
         /// <summary>
@@ -141,11 +141,11 @@ namespace FishNet.Insthync.ResquestResponse
         public void ProceedResponse(NetworkConnection networkConnection, ResponseMessage responseMessage)
         {
             uint requestId = responseMessage.requestId;
-            AckResponseCode responseCode = responseMessage.responseCode;
-            if (requestCallbacks.ContainsKey(requestId))
+            ResponseCode responseCode = responseMessage.responseCode;
+            if (_requestCallbacks.ContainsKey(requestId))
             {
-                requestCallbacks[requestId].Response(networkConnection, new Reader(responseMessage.data, Manager.NetworkManager), responseCode);
-                requestCallbacks.TryRemove(requestId, out _);
+                _requestCallbacks[requestId].Response(networkConnection, new Reader(responseMessage.data, Manager.NetworkManager), responseCode);
+                _requestCallbacks.TryRemove(requestId, out _);
             }
         }
 
@@ -162,12 +162,12 @@ namespace FishNet.Insthync.ResquestResponse
             where TRequest : new()
             where TResponse : new()
         {
-            requestInvokers[requestType] = new RequestInvoker<TRequest, TResponse>(this, handlerDelegate);
+            _requestInvokers[requestType] = new RequestInvoker<TRequest, TResponse>(this, handlerDelegate);
         }
 
         public void UnregisterRequestHandler(ushort requestType)
         {
-            requestInvokers.Remove(requestType);
+            _requestInvokers.Remove(requestType);
         }
 
         /// <summary>
@@ -183,12 +183,12 @@ namespace FishNet.Insthync.ResquestResponse
             where TRequest : new()
             where TResponse : new()
         {
-            responseInvokers[requestType] = new ResponseInvoker<TRequest, TResponse>(handlerDelegate);
+            _responseInvokers[requestType] = new ResponseInvoker<TRequest, TResponse>(handlerDelegate);
         }
 
         public void UnregisterResponseHandler(ushort requestType)
         {
-            responseInvokers.Remove(requestType);
+            _responseInvokers.Remove(requestType);
         }
     }
 }

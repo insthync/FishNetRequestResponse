@@ -24,10 +24,10 @@ namespace FishNet.Insthync.ResquestResponse
 
         public void ResponseTimeout()
         {
-            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, null, null), AckResponseCode.Timeout, ResponseHandler);
+            ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, null, null), ResponseCode.Timeout, ResponseHandler);
         }
 
-        public void Response(NetworkConnection networkConnection, Reader reader, AckResponseCode responseCode)
+        public void Response(NetworkConnection networkConnection, Reader reader, ResponseCode responseCode)
         {
             ResponseInvoker.InvokeResponse(new ResponseHandlerData(RequestId, ReqResHandler, networkConnection, reader), responseCode, ResponseHandler);
         }

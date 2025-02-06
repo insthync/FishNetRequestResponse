@@ -37,7 +37,7 @@ namespace FishNet.Insthync.ResquestResponse
         /// <param name="responseCode"></param>
         /// <param name="response"></param>
         /// <param name="extraResponseSerializer"></param>
-        private void RequestProceeded(NetworkConnection networkConnection, uint requestId, AckResponseCode responseCode, TResponse response, SerializerDelegate extraResponseSerializer)
+        private void RequestProceeded(NetworkConnection networkConnection, uint requestId, ResponseCode responseCode, TResponse response, SerializerDelegate extraResponseSerializer)
         {
             // Write response
             handler.Writer.Reset();
