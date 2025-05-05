@@ -9,27 +9,32 @@ namespace FishNet.Insthync.ResquestResponse
     public class RequestResponseManager : MonoBehaviour
     {
         [SerializeField]
-        private NetworkManager networkManager;
-        public NetworkManager NetworkManager => networkManager;
+        private NetworkManager _networkManager;
+        public NetworkManager NetworkManager => _networkManager;
 
-        public int clientRequestTimeoutInMilliseconds = 30000;
-        public int serverRequestTimeoutInMilliseconds = 30000;
+        [SerializeField]
+        public int _clientRequestTimeoutInMilliseconds = 30000;
+
+        [SerializeField]
+        public int _serverRequestTimeoutInMilliseconds = 30000;
 
         private RequestResponseHandler _serverReqResHandler;
         private RequestResponseHandler _clientReqResHandler;
 
         private void Awake()
         {
+            if (_networkManager == null)
+                _networkManager = GetComponentInParent<NetworkManager>();
             _serverReqResHandler = new RequestResponseHandler(this);
             _clientReqResHandler = new RequestResponseHandler(this);
         }
 
         private void Start()
         {
-            networkManager.ServerManager.RegisterBroadcast<RequestMessage>(ServerRequestHandler);
-            networkManager.ServerManager.RegisterBroadcast<ResponseMessage>(ServerResponseHandler);
-            networkManager.ClientManager.RegisterBroadcast<RequestMessage>(ClientRequestHandler);
-            networkManager.ClientManager.RegisterBroadcast<ResponseMessage>(ClientResponseHandler);
+            _networkManager.ServerManager.RegisterBroadcast<RequestMessage>(ServerRequestHandler);
+            _networkManager.ServerManager.RegisterBroadcast<ResponseMessage>(ServerResponseHandler);
+            _networkManager.ClientManager.RegisterBroadcast<RequestMessage>(ClientRequestHandler);
+            _networkManager.ClientManager.RegisterBroadcast<ResponseMessage>(ClientResponseHandler);
         }
 
         private void ServerRequestHandler(NetworkConnection networkConnection, RequestMessage msg, Channel channel)
@@ -62,7 +67,7 @@ namespace FishNet.Insthync.ResquestResponse
             where TRequest : new()
         {
             if (millisecondsTimeout <= 0)
-                millisecondsTimeout = serverRequestTimeoutInMilliseconds;
+                millisecondsTimeout = _serverRequestTimeoutInMilliseconds;
             return _serverReqResHandler.CreateAndSendRequest(networkConnection, requestType, request, extraRequestSerializer, responseHandler, millisecondsTimeout);
         }
 
@@ -76,7 +81,7 @@ namespace FishNet.Insthync.ResquestResponse
             where TResponse : new()
         {
             if (millisecondsTimeout <= 0)
-                millisecondsTimeout = serverRequestTimeoutInMilliseconds;
+                millisecondsTimeout = _serverRequestTimeoutInMilliseconds;
             bool done = false;
             AsyncResponseData<TResponse> responseData = default;
             // Create and send request
@@ -102,7 +107,7 @@ namespace FishNet.Insthync.ResquestResponse
             where TRequest : new()
         {
             if (millisecondsTimeout <= 0)
-                millisecondsTimeout = clientRequestTimeoutInMilliseconds;
+                millisecondsTimeout = _clientRequestTimeoutInMilliseconds;
             return _clientReqResHandler.CreateAndSendRequest(null, requestType, request, extraRequestSerializer, responseHandler, millisecondsTimeout);
         }
 
@@ -115,7 +120,7 @@ namespace FishNet.Insthync.ResquestResponse
             where TResponse : new()
         {
             if (millisecondsTimeout <= 0)
-                millisecondsTimeout = clientRequestTimeoutInMilliseconds;
+                millisecondsTimeout = _clientRequestTimeoutInMilliseconds;
             bool done = false;
             AsyncResponseData<TResponse> responseData = default;
             // Create and send request
